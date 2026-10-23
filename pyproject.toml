@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "pincheck"
+version = "0.1.0"
+description = "Supply-chain gate for requirements.txt: OSV vulnerabilities, malware advisories, and a release-age cooldown."
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "ParisNeo" }]
+keywords = ["security", "supply-chain", "requirements", "pypi", "osv", "malware", "cooldown"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Topic :: Security",
+  "Topic :: Software Development :: Quality Assurance",
+  "Typing :: Typed",
+]
+dependencies = []  # stdlib only, on purpose: a supply-chain tool should have no supply chain
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "build", "twine"]
+
+[project.scripts]
+pincheck = "pincheck.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ParisNeo/pincheck"
+Issues = "https://github.com/ParisNeo/pincheck/issues"
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "tests", "README.md", "LICENSE"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
