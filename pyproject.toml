@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "pincheck"
-version = "0.2.0"
+version = "0.3.0"
 description = "Supply-chain gate for requirements.txt: OSV vulnerabilities, malware advisories, and a release-age cooldown."
 readme = "README.md"
 requires-python = ">=3.9"

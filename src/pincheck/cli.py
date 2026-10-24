@@ -8,24 +8,30 @@ from . import __version__
 from .core import check, parse_requirements
 
 
+def format_result(r, indent=""):
+    """Lines describing one Result (shared by the requirements and scan commands)."""
+    ver = r.version or "?"
+    head = f"{r.package}=={ver}" if not r.assumed_latest else f"{r.package}{r.spec}  (latest match: {ver})"
+    age = ""
+    if r.age_hours is not None:
+        age = f"  released {r.age_hours / 24:.0f}d ago" if r.age_hours >= 48 else f"  released {r.age_hours:.0f}h ago"
+    lines = [f"[{','.join(r.status)}] {head}{age}"]
+    if r.error:
+        lines.append(f"    ! {r.error}")
+    for m in r.malware:
+        lines.append(f"    MALWARE {m}  https://osv.dev/vulnerability/{m}")
+    for v in r.vulns:
+        sev = f" [{v['severity']}]" if v.get("severity") else ""
+        fix = f"fixed in {v['fixed_in']}" if v.get("fixed_in") else "no fix recorded"
+        lines.append(f"    - {v['id']}{sev}: {v['summary']}  -> {fix}")
+    lines += [f"    note: {n}" for n in r.notes]
+    lines += [f"    advice: {a}" for a in r.advice]
+    return [indent + x for x in lines]
+
+
 def _render(results, skipped, hours):
     for r in results:
-        ver = r.version or "?"
-        head = f"{r.package}=={ver}" if not r.assumed_latest else f"{r.package}{r.spec}  (latest match: {ver})"
-        age = "" if r.age_hours is None else f"  released {r.age_hours / 24:.0f}d ago" if r.age_hours >= 48 else f"  released {r.age_hours:.0f}h ago"
-        print(f"[{','.join(r.status)}] {head}{age}")
-        if r.error:
-            print(f"    ! {r.error}")
-        for m in r.malware:
-            print(f"    MALWARE {m}  https://osv.dev/vulnerability/{m}")
-        for v in r.vulns:
-            sev = f" [{v['severity']}]" if v.get("severity") else ""
-            fix = f"fixed in {v['fixed_in']}" if v.get("fixed_in") else "no fix recorded"
-            print(f"    - {v['id']}{sev}: {v['summary']}  -> {fix}")
-        for n in r.notes:
-            print(f"    note: {n}")
-        for a in r.advice:
-            print(f"    advice: {a}")
+        print("\n".join(format_result(r)))
     changes = [r.suggest for r in results if r.suggest]
     if changes:
         print("\nSuggested pins:")
@@ -38,10 +44,15 @@ def _render(results, skipped, hours):
 
 
 def main(argv=None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv and argv[0] == "scan":
+        from .scan import main as scan_main
+
+        return scan_main(argv[1:])
     ap = argparse.ArgumentParser(
         prog="pincheck",
         description="Check requirements against OSV (vulns + malware) and a release-age cooldown, "
-                    "and suggest which version to use.",
+                    "and suggest which version to use.  Also: `pincheck scan PATH` vets pipmaster calls in Python code.",
     )
     ap.add_argument("files", nargs="*", default=["requirements.txt"], help="requirements files ('-' = stdin)")
     ap.add_argument("--hours", type=int, default=48, help="minimum release age in hours (default 48; 0 disables)")

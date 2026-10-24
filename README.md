@@ -47,6 +47,31 @@ pincheck requirements.txt --strict      # unpinned ranges fail too
 pip freeze | pincheck -
 ```
 
+## `pincheck scan`: vet pipmaster calls in your code
+
+Finds `pipmaster` calls in your Python files, vets every package the same way, and proposes fixes.
+Static analysis only (`ast`): nothing is imported or executed, and comments/strings can't trigger false hits.
+
+```
+pincheck scan src/                # report
+pincheck scan . -i                # review each fix, edit the code, see the diff, confirm
+pincheck scan . --apply           # accept every proposed fix (prints the diff)
+pincheck scan . --json --strict
+```
+
+Understands `ensure_packages` / `async_ensure_packages` (str, list, or dict forms, including
+`{"pkg": {"specifier": ">=2", "vcs": ...}}` and `"latest"`), `install_if_missing`, and
+`ensure_requirements("file.txt")` (the file is followed if it exists). It resolves
+`import pipmaster as pm`, `from pipmaster import ensure_packages as ep`, manager instances, and
+requirements held in a constant defined in the same file (`REQS = [...]; pm.ensure_packages(REQS)`).
+
+- No version, or a range: the **latest release is assumed and checked**, with the same warning as above, and a pin is proposed.
+- In `-i` mode each fix is `[p]in`, `[f]loor` (raise a vulnerable lower bound), `[e]dit` (your own specifier), `[s]kip`, `[a]ccept all`, `[q]uit`.
+  Edits are made in place on the string literal; a file is never written if the result wouldn't parse.
+- Can't be verified, and listed instead of silently passed: dynamic requirements (variables from other files,
+  f-strings, function calls), VCS/URL sources, prefixed or triple-quoted literals (reported as "manual edit").
+- Skips `.git`, virtualenvs, `node_modules`, `build`, `dist`, caches; add more with `--exclude DIR`.
+
 ## Exit codes
 
 | code | meaning |

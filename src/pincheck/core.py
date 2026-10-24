@@ -92,20 +92,26 @@ def parse_requirements(path: str, _seen: Optional[set] = None):
             if line.startswith(("-e", "--editable")):
                 skipped.append(line)
             continue  # other pip options
-        m = REQ_RE.match(line)
-        if not m:
-            skipped.append(line)
-            continue
-        rest = m.group(2).split(";")[0].strip()  # drop environment markers
-        if rest.startswith("@"):
-            skipped.append(line)  # direct URL: nothing to check against an index
-            continue
-        specs = parse_specs(rest)
-        if specs is None:
-            skipped.append(line)
-            continue
-        reqs.append(Req(norm(m.group(1)), ",".join(f"{o}{v}" for o, v in specs), tuple(specs)))
+        req = parse_requirement_line(line)
+        if req is None:
+            skipped.append(line)  # URL / VCS / unparseable: nothing to check against an index
+        else:
+            reqs.append(req)
     return list(dict.fromkeys(reqs)), skipped
+
+
+def parse_requirement_line(line: str) -> Optional[Req]:
+    """'Flask[async]>=2,<3 ; python_version>"3.8"' -> Req('flask', '>=2,<3'); None if not index-checkable."""
+    m = REQ_RE.match(line.strip())
+    if not m:
+        return None
+    rest = m.group(2).split(";")[0].strip()  # drop environment markers
+    if rest.startswith("@"):
+        return None
+    specs = parse_specs(rest)
+    if specs is None:
+        return None
+    return Req(norm(m.group(1)), ",".join(f"{o}{v}" for o, v in specs), tuple(specs))
 
 
 # --------------------------------------------------------------------------- network
@@ -250,6 +256,7 @@ class Result:
     notes: list = field(default_factory=list)
     advice: list = field(default_factory=list)
     suggest: Optional[str] = None
+    raise_floor: Optional[str] = None
     error: Optional[str] = None
 
     def to_dict(self):
@@ -433,6 +440,7 @@ def check(reqs, hours: int = 48, ignore: Iterable[str] = (), strict: bool = Fals
                 fx = [parse(x["fixed_in"]) for x in fv if x["fixed_in"]]
                 if fx and all(x["fixed_in"] for x in fv):
                     raise_to = max(fx).text
+                    raise_floor = f"{name}>={raise_to}"
                     advice.append(f"The range's lower bound {p['floor'].text} is itself vulnerable "
                                   f"({', '.join(x['id'] for x in fv)}). Raise it: {name}>={raise_to}.")
                 else:
@@ -443,7 +451,7 @@ def check(reqs, hours: int = 48, ignore: Iterable[str] = (), strict: bool = Fals
             if target and (not p["st"] or pin):
                 advice.append(f"Pin it: {name}=={target}"
                               + ("" if p["st"] else " (the latest release; clean and past the cooldown)."))
-        suggest = None
+        suggest, raise_floor = None, None
         if p["assumed"] and not p["error"]:
             suggest = f"{name}=={pin if (p['st'] and pin) else p['text']}" if (not p["st"] or pin) else None
         elif pin and p["st"]:
@@ -461,6 +469,6 @@ def check(reqs, hours: int = 48, ignore: Iterable[str] = (), strict: bool = Fals
             rel["upload"].isoformat() if rel else None, age,
             st or ["OK"], [r["id"] for r in p["mal"]], p["vul"],
             ({"version": p["floor"].text, "vulns": p["floor_vulns"]} if p["floor"] is not None else None),
-            notes, advice, suggest, p["error"],
+            notes, advice, suggest, raise_floor, p["error"],
         ))
     return results, 1 if hard else 2 if soft else 0
